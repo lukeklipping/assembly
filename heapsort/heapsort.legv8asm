@@ -1,0 +1,282 @@
+// COMS3210 
+// Assignment 1 - Heapsort
+// Lukus Klipping
+// lukeklip@iastate.edu
+
+
+
+// lukeklip@pyrite-n2:~$ /share/cs321/legv8emul COMS321/hw1/assignment1.legv8asm
+
+_start:
+    SUBI SP, SP, #96
+    STUR LR, [SP, #88]       // Save LR
+    ADD X0, SP, XZR          // X0 = array base 
+    ADDI X1, XZR, #10        // X1 = size
+    BL fill                  // Fill array
+    PRNL
+    BL print_array
+
+    PRNL
+
+    ADD X0, SP, XZR      // Reset
+    ADDI X1, XZR, #10 
+
+    BL heapsort          // Sort array
+    ADD X0, SP, XZR      // Reset X0 
+    ADDI X1, XZR, #10    // Reset X1 
+    BL print_array
+
+    LDUR LR, [SP, #88]
+    ADDI SP, SP, #96         // Deallocate 
+    HALT
+
+fill:
+    // X0 = a (address of array)
+    // X1 = s (size of array)
+    ADD X2, XZR, XZR     // i = 0
+
+    // if s < 2
+    SUBIS XZR, X1, #2 // s - 2
+    B.LT end_fill   // if less than, exit
+
+    // (s+1) / 2 and store in X3
+    ADDI X3, X1, #1 // s + 1
+    LSR X3, X3, #1 // (s+1)/2
+
+    // s/2 in X4
+    LSR X4, X1, #1
+    
+fill_loop:
+    // if i >= s/2 exit
+    SUBS XZR, X2, X4
+    B.GE check_odd
+
+    // calc ((s + 1) / 2) - (i + 1) in X5
+    ADDI X5, X2, #1
+    SUB X5, X3, X5
+    
+    //calc ((s + 1) / 2) + i
+    ADD X6, X3, X2
+
+    // calc  i * 2;
+    LSL X7, X2, #1
+
+    // calc  i * 2 + 1;
+    ADDI X8, X7, #1
+
+    // i * 2 at  ((s + 1) / 2) - (i + 1)
+    LSL X9, X5, #3      // index to byte offset
+    ADD X9, X0, X9      // a[index]
+    STUR X7,[X9, #0]
+
+    // Store i * 2 + 1 at index ((s + 1) / 2) + i
+    LSL X10, X6, #3 
+    ADD X10, X0, X10 
+    STUR X8,[X10, #0]
+
+    // i++
+    ADDI X2, X2, #1
+    B fill_loop
+
+check_odd: 
+    //check if s is odd
+    ANDIS X11, X1, #1
+    B.EQ end_fill // if even skip setting a[0]
+
+    // if odd, set a[0] = s-1
+    SUBI X13, X1, #1
+    STUR X13, [X0, #0]
+
+end_fill:
+    BR LR
+
+swap:
+    LDUR X2, [X0, #0]   // *a into X2
+    LDUR X3, [X1, #0]   // *b into X3
+
+    // swap
+    STUR X3, [X0, #0]
+    STUR X2, [X1, #0]
+
+    BR LR              // Return
+
+percolate_down:
+    SUBI SP, SP, #40       // Allocate stack space
+    STUR X19, [SP, #0]     // Save i
+    STUR X20, [SP, #8]     // Save child
+    STUR X21, [SP, #16]    // Save s
+    STUR X22, [SP, #24]    // Save a
+    STUR LR, [SP, #32] 
+
+    ADD X19, XZR, X2        // i = X2 
+    ADD X21, XZR, X1        // s = X1
+    ADD X22, XZR, X0       // a = X0
+    
+    // calc child = (2 * i) + 1
+    LSL X20, X19, #1        // 2 * i
+    ADDI X20, X20, #1       // +1
+
+percolate_loop:
+    // if (child >= s) exit 
+    SUBS XZR, X20, X21
+    B.GE percolate_done
+
+    // check child + 1 < s
+    ADDI X4, X20, #1    // child +1 in X4
+    SUBS XZR, X4, X21
+    B.GE compare_parent_child
+
+    //  a[child] < a[child + 1]
+    LSL X5, X20, #3
+    ADD X5, X22, X5
+    LDUR X6, [X5, #0]
+
+    LSL X4, X4, #3      //X4 = (child + 1) *8
+    ADD X4, X22, X4     // X4 = a + (child + 1) *8
+    LDUR X7, [X4, #0]
+
+    SUBS XZR, X6, X7
+    B.GE compare_parent_child
+
+    ADDI X20, X20, #1 // child++
+compare_parent_child:
+    // address of a[i]
+    LSL X4, X19, #3         // X5 = i*8  
+    ADD X4, X22, X4         // X5 = a + i*8
+    LDUR X6, [X4, #0]       // X6 = a[i]
+
+    //address of a[child]
+    LSL X5, X20, #3         //X5 = child*8
+    ADD X5, X22, X5         //X5 = a + child*8
+    LDUR X7, [X5, #0]       // X6 = a[child]
+    // compare a[i] and  a[child]
+    SUBS XZR, X6, X7
+    B.GE percolate_done
+
+    //call swap
+    ADD X0, X4, XZR         // X0 = &a[i]
+    ADD X1, X5, XZR         // X1 = &a[child]
+    BL swap
+
+    // end of loop sets
+    ADD X19, X20, XZR       // i = child
+    LSL X20, X19, #1        // child  = i*2
+    ADDI X20, X20, #1       // child = (i *2) + 1
+    SUBS XZR, X20, X21   // child < s
+    B.GE percolate_done
+    B percolate_loop
+
+percolate_done:
+    //restore registers
+    LDUR X19, [SP, #0]     // Save registers i
+    LDUR X20, [SP, #8]     // Save child
+    LDUR X21, [SP, #16]    // Save s
+    LDUR X22, [SP, #24]    // Save a
+    LDUR LR, [SP, #32]
+    ADDI SP, SP, #40       // Deallocate stack space
+    BR LR
+heapify:
+    SUBI SP, SP, #32        // Allocate stack
+    STUR X19, [SP, #0]      // Save i
+    STUR X20, [SP, #8]      // Save a
+    STUR X21, [SP, #16]     // Save s
+    STUR LR, [SP, #24]
+
+    ADD X20, X0, XZR        // X20 = a
+    ADD X21, X1, XZR        // X21 = s
+
+    // i = (s + 1) / 2;
+    LSR X19, X21, #1     // i = s / 2 = 5
+    SUBI X19, X19, #1    // i = s / 2 - 1 = 4
+    //ADDI X19, X21, #1       // X19 = s+1
+    //LSR X19, X19, #1        // X19 = (s+1)/2
+
+heapify_loop:
+    CBZ X19, heapify_done   //  compare i == 0
+    
+    // Call percolate_down(a, s, i)
+    ADD X0, X20, XZR        // X0 = a
+    ADD X1, X21, XZR        // X1 = s
+    ADD X2, X19, XZR        // X2 = i
+    BL percolate_down
+
+    SUBI X19, X19, #1       // i --;
+    B heapify_loop          // Loop back
+
+heapify_done:
+    // percolate_down(a, s, 0);
+    ADD X0, X20, XZR        // X0 = a
+    ADD X1, X21, XZR        // X1 = s
+    ADD X2, XZR, XZR        // X2 = 0
+    BL percolate_down       // final call
+
+    LDUR X19, [SP, #0]      // restore
+    LDUR X20, [SP, #8]      
+    LDUR X21, [SP, #16] 
+    LDUR LR, [SP, #24]    
+    ADDI SP, SP, #32      
+    BR LR
+heapsort:
+    SUBI SP, SP, #32        // Allocate stack
+    STUR X19, [SP, #0]      // Save i
+    STUR X20, [SP, #8]      // Save a
+    STUR X21, [SP, #16]     // Save s
+    STUR LR, [SP, #24]
+
+    ADD X20, X0, XZR        // X20 = a
+    ADD X21, X1, XZR        // X21 = s
+
+    ADD X0, X20, XZR        // X0 = a
+    ADD X1, X21, XZR        // X1 = s
+    BL heapify
+
+    ADDI X19, XZR, #1       // X19 = i = 1
+heapsort_loop:
+    SUBS XZR, X19, X21
+    B.GE heapsort_done
+
+    // swap(a + 0, a + (s - i));
+    SUB X3, X21, X19        // s-i
+    LSL X3, X3, #3          // convert to int byte
+    ADD X1, X20, X3
+    ADD X0, X20, XZR
+    BL swap
+
+    // percolate_down(a, s - i, 0);
+    SUB X1, X21, X19        // X1 = s-i
+    ADD X2, XZR, XZR
+    ADD X0, X20, XZR
+    BL percolate_down
+
+    ADDI X19, X19, #1       // i++
+    B heapsort_loop
+
+heapsort_done:
+    LDUR X19, [SP, #0]      // Save i
+    LDUR X20, [SP, #8]      // Save a
+    LDUR X21, [SP, #16]     // Save s
+    LDUR LR, [SP, #24]
+    ADDI SP, SP, #32        // deallocate stack
+    BR LR
+
+
+
+// print_array
+print_array:
+    SUBI SP, SP, #16
+    STUR X19, [SP, #0]
+    STUR X20, [SP, #8]
+    ADD X19, X0, XZR        // X19 = array base
+    ADD X20, X1, XZR        // X20 = counter
+printa_loop:
+    CBZ X20, printa_done     // Exit 
+    LDUR X0, [X19, #0]      // Load a[i]
+    PRNT X0                 // Print value
+    ADDI X19, X19, #8       // Next element 
+    SUBI X20, X20, #1       // Decrement counter
+    B printa_loop
+printa_done:
+    LDUR X19, [SP, #0]
+    LDUR X20, [SP, #8]
+    ADDI SP, SP, #16
+    BR LR
